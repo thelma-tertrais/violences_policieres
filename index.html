@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Graphe des témoignages</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Mono:wght@400;500&family=Source+Sans+3:wght@400;600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+/* Layout: graph canvas on the left, investigation panel on the right; stacks on phones. */
+:root{
+  --bg:#eceff3; --surface:#ffffff; --ink:#16202b; --muted:#566273; --line:#d2d8e1; --accent:#1f47c4; --warn:#9a3412; --warn-bg:#fff1e6;
+  --c1:#c2410c; --c2:#b91c1c; --c3:#7c3aed; --c4:#0e7490; --c5:#a16207; --c6:#be185d; --c7:#1d4ed8; --c8:#4d7c0f;
+  --f-display:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --f-body:"Source Sans 3","Segoe UI",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f141b; --surface:#171f29; --ink:#e5e9ef; --muted:#97a2b3; --line:#2a3443; --accent:#86a6ff; --warn:#fdba74; --warn-bg:#2b1a0e;
+  --c1:#fb923c; --c2:#f87171; --c3:#a78bfa; --c4:#22d3ee; --c5:#facc15; --c6:#f472b6; --c7:#60a5fa; --c8:#a3e635; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f141b; --surface:#171f29; --ink:#e5e9ef; --muted:#97a2b3; --line:#2a3443; --accent:#86a6ff; --warn:#fdba74; --warn-bg:#2b1a0e;
+  --c1:#fb923c; --c2:#f87171; --c3:#a78bfa; --c4:#22d3ee; --c5:#facc15; --c6:#f472b6; --c7:#60a5fa; --c8:#a3e635; color-scheme:dark}
+html,body{height:100%;margin:0}
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45}
+.wrap{display:flex;flex-direction:column;min-height:100%;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:14px 16px;gap:12px;box-sizing:border-box}
+header{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 18px}
+h1{font-family:var(--f-display);font-weight:800;font-size:1.5rem;letter-spacing:-.01em;margin:0;text-wrap:balance}
+.sub{color:var(--muted);font-size:.92rem}
+.banner{background:var(--warn-bg);color:var(--warn);border:1px solid color-mix(in srgb,var(--warn) 35%,transparent);border-radius:6px;padding:6px 10px;font-size:.85rem}
+.main{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:12px;flex:1;min-height:560px}
+@media (max-width:860px){.main{grid-template-columns:1fr}.graph{height:62vh;min-height:420px}}
+.graph{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:8px;overflow:hidden;min-width:0}
+svg{display:block;width:100%;height:100%;cursor:grab}
+.toolbar{position:absolute;left:10px;top:10px;display:flex;flex-wrap:wrap;gap:6px;max-width:calc(100% - 20px)}
+.chip{font-family:var(--f-mono);font-size:.75rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;padding:4px 10px;cursor:pointer}
+.chip[aria-pressed="false"]{color:var(--muted);opacity:.7}
+.chip:focus-visible,button:focus-visible,textarea:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.legend{position:absolute;left:10px;bottom:10px;font-family:var(--f-mono);font-size:.7rem;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap;background:color-mix(in srgb,var(--surface) 85%,transparent);padding:4px 8px;border-radius:6px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;display:flex;flex-direction:column;min-width:0;max-height:calc(100vh - 140px);overflow:hidden}
+@media (max-width:860px){.panel{max-height:none}}
+.tabs{display:flex;border-bottom:1px solid var(--line)}
+.tab{flex:1;background:none;border:0;border-bottom:2px solid transparent;padding:10px 6px;font-family:var(--f-display);font-weight:700;font-size:.85rem;color:var(--muted);cursor:pointer}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.pane{padding:14px;overflow:auto;display:flex;flex-direction:column;gap:12px}
+.eyebrow{font-family:var(--f-mono);font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+h2{font-family:var(--f-display);font-size:1.1rem;margin:0;text-wrap:balance}
+.cl{display:grid;grid-template-columns:12px 1fr auto;align-items:center;gap:10px;padding:7px 8px;border-radius:6px;cursor:pointer;border:1px solid transparent;background:none;color:inherit;text-align:left;font:inherit;width:100%}
+.cl:hover{border-color:var(--line)}
+.cl.off{opacity:.4}
+.dot{width:12px;height:12px;border-radius:50%}
+.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums;font-size:.85rem;color:var(--muted)}
+.bar{height:4px;border-radius:2px;background:var(--line);grid-column:2/4;overflow:hidden}
+.bar>i{display:block;height:100%}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:.9rem}
+.kv dt{color:var(--muted)}.kv dd{margin:0}
+.tags{display:flex;flex-wrap:wrap;gap:4px}
+.tag{font-family:var(--f-mono);font-size:.72rem;border:1px solid var(--line);border-radius:4px;padding:1px 6px}
+.status{font-family:var(--f-mono);font-size:.72rem;border-radius:4px;padding:1px 6px;color:var(--surface);background:var(--muted)}
+.status.v{background:var(--accent)}
+blockquote{margin:0;padding:8px 12px;border-left:3px solid var(--line);font-size:.95rem}
+.meter{display:flex;gap:2px}.meter i{flex:1;height:8px;border-radius:2px;background:var(--line)}
+label{font-size:.85rem;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+textarea,select,input{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:7px 9px}
+textarea{min-height:96px;resize:vertical}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.btn{font-family:var(--f-display);font-weight:700;background:var(--accent);color:var(--surface);border:0;border-radius:6px;padding:9px 14px;cursor:pointer;align-self:flex-start}
+.btn.ghost{background:none;color:var(--accent);border:1px solid var(--line)}
+.note{font-size:.82rem;color:var(--muted)}
+.ready{border:1px solid var(--line);border-radius:6px;padding:10px;font-size:.9rem}
+.ready strong{font-family:var(--f-display)}
+.list{display:flex;flex-direction:column;gap:6px}
+.case{border:1px solid var(--line);border-radius:6px;padding:8px;cursor:pointer;background:none;color:inherit;font:inherit;text-align:left}
+.case:hover{border-color:var(--accent)}
+.case .id{font-family:var(--f-mono);font-size:.75rem;color:var(--muted)}
+svg text{font-family:var(--f-mono);fill:var(--ink);pointer-events:none}
+.tlabel{font-family:var(--f-display);font-weight:800;font-size:13px;paint-order:stroke;stroke:var(--surface);stroke-width:4px}
+.elabel{font-size:10px;fill:var(--muted);paint-order:stroke;stroke:var(--surface);stroke-width:3px}
+.link{stroke:var(--line);stroke-width:1}
+.faded{opacity:.12}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>Graphe des témoignages</h1>
+    <span class="sub">Mobilisations lycéennes et gilets jaunes · depuis le 17 septembre 2026</span>
+    <span class="banner" role="note">Prototype : tous les témoignages affichés sont fictifs.</span>
+  </header>
+
+  <div class="main">
+    <div class="graph" id="graph">
+      <svg id="svg" aria-label="Graphe de connaissances des témoignages"></svg>
+      <div class="toolbar" role="group" aria-label="Entités affichées">
+        <button class="chip" data-kind="arme" aria-pressed="true">◆ Armes</button>
+        <button class="chip" data-kind="ville" aria-pressed="false">■ Villes</button>
+        <button class="chip" data-kind="date" aria-pressed="false">▲ Journées</button>
+        <button class="chip" id="reset" aria-pressed="true">Tout afficher</button>
+      </div>
+      <div class="legend">
+        <span>● témoignage (taille = gravité)</span><span>◆ arme</span><span>■ ville</span><span>▲ journée</span>
+      </div>
+    </div>
+
+    <aside class="panel">
+      <div class="tabs" role="tablist">
+        <button class="tab" role="tab" aria-selected="true" data-tab="clusters">Clusters</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="query">Interroger</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="add">Ajouter</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="detail">Détail</button>
+      </div>
+
+      <section class="pane" data-pane="clusters">
+        <div class="eyebrow">Communautés détectées</div>
+        <div id="clusterList" class="list"></div>
+        <p class="note">Cliquez un cluster pour voir son dossier. Cliquez la pastille pour le masquer dans le graphe.</p>
+      </section>
+
+      <section class="pane" data-pane="query" hidden>
+        <div class="eyebrow">Recherche dans le graphe</div>
+        <form id="qform" class="list">
+          <label for="q">Posez une question ou tapez des mots-clés
+            <input id="q" value="LBD lycéens Paris" autocomplete="off">
+          </label>
+          <button class="btn" type="submit">Interroger le graphe</button>
+        </form>
+        <div class="tags" id="qexamples"></div>
+        <div id="qresult"></div>
+      </section>
+
+      <section class="pane" data-pane="add" hidden>
+        <div class="eyebrow">Nouveau témoignage</div>
+        <form id="aform" class="list">
+          <label for="atext">Récit des faits
+            <textarea id="atext">Pendant le blocus, un policier m'a tiré dessus au LBD à la jambe, puis j'ai été plaquée au sol. J'ai une vidéo et un certificat médical.</textarea>
+          </label>
+          <div class="row">
+            <label for="aville">Ville<select id="aville"></select></label>
+            <label for="adate">Journée<select id="adate"></select></label>
+          </div>
+          <div class="row">
+            <label for="aprofil">Profil<select id="aprofil"></select></label>
+            <label for="agrav">Gravité<select id="agrav"></select></label>
+          </div>
+          <button class="btn" type="submit">Extraire et ajouter au graphe</button>
+        </form>
+        <div id="aresult"></div>
+        <p class="note">Ici l'extraction se fait par mots-clés. Dans la version complète, un modèle de langage lirait chaque récit pour en extraire les entités (armes, unités, lieux, blessures) et rédigerait la synthèse de chaque cluster.</p>
+      </section>
+
+      <section class="pane" data-pane="detail" hidden>
+        <div id="detail"><p class="note">Cliquez un nœud du graphe pour afficher son détail.</p></div>
+      </section>
+    </aside>
+  </div>
+</div>
+
+<script>
+(function(){
+const TYPES=[
+ {id:'lbd',label:'Tirs de LBD',c:'--c1',kw:['lbd','balle','flashball','tir'],armes:['LBD 40']},
+ {id:'gren',label:'Grenades',c:'--c2',kw:['grenade','explosion','eclat','gm2l','desencerclement'],armes:['GM2L','Grenade de désencerclement']},
+ {id:'coups',label:'Coups de matraque',c:'--c3',kw:['matraque','tonfa','coup','frappe','frappé'],armes:['Matraque télescopique','Tonfa']},
+ {id:'gaz',label:'Gaz lacrymogène',c:'--c4',kw:['gaz','lacrymo','gazage','spray','asphyx'],armes:['Gaz CS','Aérosol individuel']},
+ {id:'nasse',label:'Nasses',c:'--c5',kw:['nasse','encercle','bloque','enferme'],armes:[]},
+ {id:'interp',label:'Interpellations violentes',c:'--c6',kw:['plaque','menotte','genou','interpelle','sol'],armes:['Menottes']},
+ {id:'gav',label:'Garde à vue de mineurs',c:'--c7',kw:['garde a vue','gav','parents','commissariat','genoux'],armes:[]},
+ {id:'insult',label:'Insultes et menaces',c:'--c8',kw:['insulte','menace','raciste','injure'],armes:[]}
+];
+const TMAP=Object.fromEntries(TYPES.map(t=>[t.id,t]));
+const RECITS={
+ lbd:['Touché à la cuisse par un tir de LBD à une quinzaine de mètres, alors que le cortège reculait.','Tir de LBD au thorax pendant la dispersion, aucune sommation entendue.','Impact de LBD près de la tempe, hospitalisation de deux jours.','Plusieurs tirs de LBD vers un groupe assis devant le lycée.'],
+ gren:['Éclats de grenade de désencerclement dans les mollets, plusieurs blessés autour de moi.','Grenade lancée au milieu de lycéens qui tenaient le blocus.','Brûlure à la main après l’explosion d’une grenade au sol.'],
+ coups:['Coups de matraque sur la tête et les bras pendant la charge.','Frappé au sol par plusieurs agents après être tombé.','Coup de tonfa au visage en tentant de quitter le rassemblement.'],
+ gaz:['Gazage au visage à bout portant, gêne respiratoire pendant plusieurs heures.','Gaz lacrymogène tiré dans la cour, une élève asthmatique a fait un malaise.','Aérosol vidé sur des lycéens qui filmaient.'],
+ nasse:['Encerclés pendant quatre heures sans eau ni toilettes.','Nasse sur la place, impossible de sortir même pour les passants.','Bloqués entre deux rangées de CRS, puis gazés.'],
+ interp:['Plaquée au sol, genou sur le dos, menottes trop serrées.','Interpellé en marge du blocus, poignet foulé.','Projeté contre un mur au moment de l’interpellation.'],
+ gav:['Garde à vue de vingt heures, parents prévenus le lendemain.','Alignés à genoux, mains sur la tête, avant le transfert au commissariat.','Mineur de 16 ans, pas d’avocat avant l’audition.'],
+ insult:['Insultes racistes pendant le contrôle à la sortie du cortège.','Menaces adressées à des lycéens qui filmaient la scène.','Injures sexistes envers des lycéennes lors de la dispersion.']
+};
+const VILLES=['Paris','Lyon','Marseille','Toulouse','Nantes','Lille','Bordeaux','Rennes','Argenteuil','Lens'];
+const DATES=['17 sept.','24 sept.','1er oct.','6 oct.','13 oct.'];
+const PROFILS=['Lycéen·ne, 15–17 ans','Lycéen·ne majeur·e','Gilet jaune','Passant·e','Journaliste','Street medic'];
+const GRAV=['Sans ITT','ITT < 8 jours','ITT ≥ 8 jours','Mutilation'];
+const PREUVES=['Vidéo','Photo','Certificat médical','Témoin','Plainte déposée'];
+const STATUTS=['Signalé','Vérifié','Documenté'];
+// pondérations par type (fréquence)
+const WEIGHTS={lbd:9,gren:5,coups:8,gaz:7,nasse:4,interp:7,gav:5,insult:3};
+
+let seed=7;const rnd=()=>{seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};
+const pick=a=>a[Math.floor(rnd()*a.length)];
+const norm=s=>s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+const cases=[];let n=1;
+for(const t of TYPES){for(let i=0;i<WEIGHTS[t.id];i++){
+  const g=t.id==='insult'||t.id==='nasse'?Math.floor(rnd()*2):t.id==='lbd'||t.id==='gren'?1+Math.floor(rnd()*3):Math.floor(rnd()*3);
+  const pr=PREUVES.filter(()=>rnd()<.45);if(!pr.length)pr.push('Témoin');
+  cases.push({id:'T-'+String(n++).padStart(3,'0'),type:t.id,text:pick(RECITS[t.id]),ville:pick(VILLES),date:pick(DATES),
+    profil:t.id==='gav'?PROFILS[0]:pick(PROFILS),grav:g,preuves:pr,statut:pick(STATUTS),arme:t.armes.length?pick(t.armes):null});
+}}
+
+// ---------- graph model ----------
+const nodes=[],links=[],byId={};
+function addNode(o){if(!byId[o.id]){byId[o.id]=o;nodes.push(o)}return byId[o.id]}
+TYPES.forEach(t=>addNode({id:'type:'+t.id,kind:'type',label:t.label,t:t.id}));
+function addCase(c){
+  const cn=addNode({id:c.id,kind:'case',data:c,t:c.type});
+  links.push({source:c.id,target:'type:'+c.type,kind:'type'});
+  if(c.arme){addNode({id:'arme:'+c.arme,kind:'arme',label:c.arme});links.push({source:c.id,target:'arme:'+c.arme,kind:'arme'})}
+  addNode({id:'ville:'+c.ville,kind:'ville',label:c.ville});links.push({source:c.id,target:'ville:'+c.ville,kind:'ville'});
+  addNode({id:'date:'+c.date,kind:'date',label:c.date});links.push({source:c.id,target:'date:'+c.date,kind:'date'});
+  return cn;
+}
+cases.forEach(addCase);
+
+const show={arme:true,ville:false,date:false};
+const hiddenTypes=new Set();
+let highlight=null; // Set of node ids or null
+
+// ---------- rendering ----------
+const svg=d3.select('#svg');const box=document.getElementById('graph');
+let W=box.clientWidth,H=box.clientHeight;
+const root=svg.append('g');
+svg.call(d3.zoom().scaleExtent([.3,4]).on('zoom',e=>root.attr('transform',e.transform)));
+const gHull=root.append('g'),gLink=root.append('g'),gNode=root.append('g'),gLabel=root.append('g');
+const hullLine=d3.line().curve(d3.curveCatmullRomClosed.alpha(.5));
+
+function centers(){
+  const R=Math.min(W,H)*.32,cx=W/2,cy=H/2+10;
+  TYPES.forEach((t,i)=>{const a=i/TYPES.length*2*Math.PI-Math.PI/2;const nd=byId['type:'+t.id];nd.fx=cx+R*Math.cos(a)*(W>H?1.25:1);nd.fy=cy+R*Math.sin(a)})
+}
+centers();
+const caseR=d=>5+d.data.grav*2.2;
+const sim=d3.forceSimulation(nodes)
+ .force('link',d3.forceLink(links).id(d=>d.id).distance(l=>l.kind==='type'?36:110).strength(l=>l.kind==='type'?.6:.03))
+ .force('charge',d3.forceManyBody().strength(d=>d.kind==='case'?-40:-120))
+ .force('collide',d3.forceCollide(d=>d.kind==='case'?caseR(d)+2:d.kind==='type'?14:10))
+ .force('x',d3.forceX(W/2).strength(d=>d.kind==='case'?0:.04))
+ .force('y',d3.forceY(H/2).strength(d=>d.kind==='case'?0:.04))
+ .on('tick',ticked);
+
+const sym={arme:d3.symbolDiamond,ville:d3.symbolSquare,date:d3.symbolTriangle};
+let linkSel,nodeSel,labelSel;
+function visible(d){
+  if(d.kind==='case'||d.kind==='type')return !hiddenTypes.has(d.t);
+  return show[d.kind]&&links.some(l=>l.target===d&&!hiddenTypes.has(l.source.t));
+}
+function render(){
+  const vl=links.filter(l=>visible(l.source)&&visible(l.target)&&(l.kind==='type'||show[l.kind]));
+  linkSel=gLink.selectAll('line').data(vl,l=>l.source.id+'>'+l.target.id).join('line').attr('class','link')
+    .style('stroke',l=>l.kind==='type'?`color-mix(in srgb, var(${TMAP[l.source.t].c}) 40%, transparent)`:null);
+  const vn=nodes.filter(visible);
+  nodeSel=gNode.selectAll('.n').data(vn,d=>d.id).join(enter=>{
+    const g=enter.append('g').attr('class','n').style('cursor','pointer').on('click',(e,d)=>{e.stopPropagation();select(d)})
+      .call(d3.drag().on('start',(e,d)=>{if(!e.active)sim.alphaTarget(.2).restart();if(d.kind!=='type'){d.fx=d.x;d.fy=d.y}})
+        .on('drag',(e,d)=>{if(d.kind!=='type'){d.fx=e.x;d.fy=e.y}}).on('end',(e,d)=>{if(!e.active)sim.alphaTarget(0);if(d.kind!=='type'){d.fx=null;d.fy=null}}));
+    g.each(function(d){const s=d3.select(this);
+      if(d.kind==='case'){s.append('circle').attr('r',caseR(d)).style('fill',`var(${TMAP[d.t].c})`).style('stroke','var(--surface)').style('stroke-width',1.5);
+        s.append('title').text(d.id+' · '+d.data.text)}
+      else if(d.kind==='type'){s.append('circle').attr('r',11).style('fill','var(--surface)').style('stroke',`var(${TMAP[d.t].c})`).style('stroke-width',3)}
+      else{s.append('path').attr('d',d3.symbol(sym[d.kind],90)()).style('fill','var(--surface)').style('stroke','var(--muted)').style('stroke-width',1.5);s.append('title').text(d.label)}
+    });return g});
+  labelSel=gLabel.selectAll('text').data(vn.filter(d=>d.kind!=='case'),d=>d.id).join('text')
+    .attr('class',d=>d.kind==='type'?'tlabel':'elabel').attr('text-anchor','middle').attr('dy',d=>d.kind==='type'?-18:-10)
+    .text(d=>d.kind==='type'?d.label+' ('+countType(d.t)+')':d.label).style('fill',d=>d.kind==='type'?`var(${TMAP[d.t].c})`:null);
+  applyHighlight();sim.alpha(.6).restart();ticked();
+}
+function hulls(){
+  const data=TYPES.filter(t=>!hiddenTypes.has(t.id)).map(t=>{
+    const pts=nodes.filter(d=>d.t===t.id&&d.x!=null).map(d=>[d.x,d.y]);
+    let h=pts.length>=3?d3.polygonHull(pts):null;
+    if(!h){const p=pts[0]||[0,0];h=[[p[0]-1,p[1]],[p[0]+1,p[1]],[p[0],p[1]+1]]}
+    return{t,h}});
+  gHull.selectAll('path').data(data,d=>d.t.id).join('path')
+    .attr('d',d=>hullLine(d.h)).style('fill',d=>`var(${d.t.c})`).style('stroke',d=>`var(${d.t.c})`)
+    .style('fill-opacity',.08).style('stroke-opacity',.08).style('stroke-width',44).style('stroke-linejoin','round')
+    .attr('class',d=>highlight&&!highlight.has('type:'+d.t.id)?'faded':null);
+}
+function ticked(){
+  // pull cases toward their cluster center
+  nodes.forEach(d=>{if(d.kind==='case'){const c=byId['type:'+d.t];d.vx+=(c.x-d.x)*.012;d.vy+=(c.y-d.y)*.012}});
+  if(!linkSel)return;
+  linkSel.attr('x1',l=>l.source.x).attr('y1',l=>l.source.y).attr('x2',l=>l.target.x).attr('y2',l=>l.target.y);
+  nodeSel.attr('transform',d=>`translate(${d.x},${d.y})`);
+  labelSel.attr('x',d=>d.x).attr('y',d=>d.y);
+  hulls();
+}
+function applyHighlight(){
+  if(!nodeSel)return;
+  const f=d=>highlight&&!highlight.has(d.id);
+  nodeSel.classed('faded',f);labelSel.classed('faded',f);
+  linkSel.classed('faded',l=>highlight&&!(highlight.has(l.source.id)&&highlight.has(l.target.id)));
+  hulls();
+}
+const countType=t=>nodes.filter(d=>d.kind==='case'&&d.t===t).length;
+const neighbors=d=>links.filter(l=>l.source===d||l.target===d).map(l=>l.source===d?l.target:l.source);
+svg.on('click',()=>{highlight=null;applyHighlight()});
+
+// ---------- panel ----------
+const tabs=[...document.querySelectorAll('.tab')];
+function openTab(name){tabs.forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===name));document.querySelectorAll('.pane').forEach(p=>p.hidden=p.dataset.pane!==name)}
+tabs.forEach(b=>b.onclick=()=>openTab(b.dataset.tab));
+
+function caseItems(list){return list.map(d=>`<button class="case" data-id="${d.id}"><span class="id">${d.id} · ${esc(d.data.ville)} · ${esc(d.data.date)}</span><br>${esc(d.data.text)}</button>`).join('')}
+function bindCases(el){el.querySelectorAll('.case').forEach(b=>b.onclick=()=>select(byId[b.dataset.id]))}
+
+function renderClusters(){
+  const max=Math.max(...TYPES.map(t=>countType(t.id)));
+  const el=document.getElementById('clusterList');
+  el.innerHTML=TYPES.map(t=>{const k=countType(t.id);return `<div class="cl ${hiddenTypes.has(t.id)?'off':''}" data-t="${t.id}" role="button" tabindex="0">
+    <span class="dot" data-toggle="${t.id}" title="Masquer ou afficher" style="background:var(${t.c})"></span><span>${t.label}</span><span class="num">${k}</span>
+    <span class="bar"><i style="width:${k/max*100}%;background:var(${t.c})"></i></span></div>`}).join('');
+  el.querySelectorAll('.cl').forEach(row=>{row.onclick=e=>{const tg=e.target.dataset.toggle;
+    if(tg){hiddenTypes.has(tg)?hiddenTypes.delete(tg):hiddenTypes.add(tg);renderClusters();render();return}
+    select(byId['type:'+row.dataset.t])};row.onkeydown=e=>{if(e.key==='Enter')row.click()}});
+}
+
+function tally(list,f){const m={};list.forEach(d=>[].concat(f(d)).forEach(v=>m[v]=(m[v]||0)+1));return Object.entries(m).sort((a,b)=>b[1]-a[1])}
+function tagsOf(entries,lim=6){return entries.slice(0,lim).map(([k,v])=>`<span class="tag">${esc(k)} · ${v}</span>`).join('')}
+
+function dossier(list){
+  const verif=list.filter(d=>d.data.statut!=='Signalé').length;
+  const graves=list.filter(d=>d.data.grav>=2).length;
+  const med=list.filter(d=>d.data.preuves.includes('Certificat médical')).length;
+  const ready=verif>=5&&med>=3;
+  return `<dl class="kv"><dt>Témoignages</dt><dd>${list.length}</dd><dt>Vérifiés ou documentés</dt><dd>${verif}</dd>
+    <dt>ITT ≥ 8 j ou mutilation</dt><dd>${graves}</dd><dt>Avec certificat médical</dt><dd>${med}</dd></dl>
+    <div><div class="eyebrow">Villes</div><div class="tags">${tagsOf(tally(list,d=>d.data.ville))}</div></div>
+    <div><div class="eyebrow">Journées</div><div class="tags">${tagsOf(tally(list,d=>d.data.date))}</div></div>
+    <div><div class="eyebrow">Profils</div><div class="tags">${tagsOf(tally(list,d=>d.data.profil))}</div></div>
+    <div><div class="eyebrow">Preuves disponibles</div><div class="tags">${tagsOf(tally(list,d=>d.data.preuves))}</div></div>
+    <div class="ready"><strong>${ready?'Base possible pour un dossier collectif':'Dossier encore incomplet'}</strong><br>
+    ${ready?'Assez de cas vérifiés et documentés médicalement pour être présentés à une association habilitée, qui évaluera la similarité des situations.':'Il faut davantage de cas vérifiés et de certificats médicaux pour démontrer un manquement de même nature.'}</div>`;
+}
+
+function select(d){
+  const el=document.getElementById('detail');
+  if(d.kind==='case'){
+    const c=d.data,t=TMAP[c.type];
+    highlight=new Set([d.id,...neighbors(d).map(x=>x.id)]);
+    el.innerHTML=`<div class="eyebrow">${c.id} · <span class="status ${c.statut!=='Signalé'?'v':''}">${c.statut}</span></div>
+      <h2 style="color:var(${t.c})">${t.label}</h2><blockquote>${esc(c.text)}</blockquote>
+      <dl class="kv"><dt>Ville</dt><dd>${esc(c.ville)}</dd><dt>Journée</dt><dd>${esc(c.date)}</dd><dt>Profil</dt><dd>${esc(c.profil)}</dd>
+      <dt>Arme</dt><dd>${c.arme?esc(c.arme):'—'}</dd><dt>Gravité</dt><dd>${GRAV[c.grav]}<div class="meter">${GRAV.map((_,i)=>`<i style="${i<=c.grav?`background:var(${t.c})`:''}"></i>`).join('')}</div></dd></dl>
+      <div><div class="eyebrow">Preuves</div><div class="tags">${c.preuves.map(p=>`<span class="tag">${p}</span>`).join('')}</div></div>
+      <div><div class="eyebrow">Cas similaires (même type et même ville ou journée)</div><div class="list" id="sim">${caseItems(nodes.filter(x=>x.kind==='case'&&x!==d&&x.t===d.t&&(x.data.ville===c.ville||x.data.date===c.date)).slice(0,4))||'<p class="note">Aucun pour l’instant.</p>'}</div></div>`;
+  }else if(d.kind==='type'){
+    const list=nodes.filter(x=>x.kind==='case'&&x.t===d.t);
+    highlight=new Set([d.id,...list.map(x=>x.id),...list.flatMap(x=>neighbors(x).map(y=>y.id))]);
+    el.innerHTML=`<div class="eyebrow">Dossier du cluster</div><h2 style="color:var(${TMAP[d.t].c})">${d.label}</h2>${dossier(list)}
+      <div><div class="eyebrow">Témoignages</div><div class="list">${caseItems(list)}</div></div>`;
+  }else{
+    const list=neighbors(d).filter(x=>x.kind==='case'&&!hiddenTypes.has(x.t));
+    highlight=new Set([d.id,...list.map(x=>x.id),...list.map(x=>'type:'+x.t)]);
+    const kindLabel={arme:'Arme',ville:'Ville',date:'Journée'}[d.kind];
+    el.innerHTML=`<div class="eyebrow">${kindLabel}</div><h2>${esc(d.label)}</h2>
+      <div><div class="eyebrow">Types de violences liés</div><div class="tags">${tagsOf(tally(list,x=>TMAP[x.t].label),8)}</div></div>
+      ${dossier(list)}<div><div class="eyebrow">Témoignages</div><div class="list">${caseItems(list)}</div></div>`;
+  }
+  bindCases(el);openTab('detail');applyHighlight();
+}
+
+// ---------- query (local graph retrieval) ----------
+const ENT=[
+ ...TYPES.map(t=>({kind:'type',val:t.id,keys:[norm(t.label),...t.kw]})),
+ ...VILLES.map(v=>({kind:'ville',val:v,keys:[norm(v)]})),
+ ...DATES.map(v=>({kind:'date',val:v,keys:[norm(v).replace('.','')]})),
+ {kind:'profil',val:'lyc',keys:['lyceen','lyceens','lyceenne','mineur','mineurs','eleve']},
+ {kind:'profil',val:'Gilet jaune',keys:['gilet','gilets jaunes','gj']},
+ {kind:'profil',val:'Journaliste',keys:['journaliste','presse']},
+ {kind:'grav',val:'grave',keys:['grave','graves','mutil','eborgn','blesse']},
+ {kind:'preuve',val:'Vidéo',keys:['video','videos','filme']},
+ {kind:'preuve',val:'Certificat médical',keys:['certificat','medical']}
+];
+function runQuery(q){
+  const nq=norm(q);const hits=ENT.filter(e=>e.keys.some(k=>k.length>2&&nq.includes(k)));
+  const groups={};hits.forEach(h=>(groups[h.kind]=groups[h.kind]||[]).push(h.val));
+  const test={type:(c,v)=>v.includes(c.type),ville:(c,v)=>v.includes(c.ville),date:(c,v)=>v.includes(c.date),
+    profil:(c,v)=>v.some(x=>x==='lyc'?c.profil.startsWith('Lycéen'):c.profil===x),grav:c=>c.grav>=2,preuve:(c,v)=>v.some(x=>c.preuves.includes(x))};
+  const list=nodes.filter(d=>d.kind==='case'&&!hiddenTypes.has(d.t)&&Object.entries(groups).every(([k,v])=>test[k](d.data,v)));
+  const out=document.getElementById('qresult');
+  if(!hits.length){out.innerHTML='<p class="note">Aucune entité reconnue. Essayez un type de violence, une arme, une ville ou une journée.</p>';return}
+  highlight=new Set([...list.map(d=>d.id),...list.flatMap(d=>neighbors(d).map(x=>x.id))]);applyHighlight();
+  const lab={type:'Type',ville:'Ville',date:'Journée',profil:'Profil',grav:'Gravité',preuve:'Preuve'};
+  out.innerHTML=`<div><div class="eyebrow">Entités reconnues</div><div class="tags">${Object.entries(groups).map(([k,v])=>`<span class="tag">${lab[k]} : ${v.map(x=>x==='lyc'?'lycéen·ne':TMAP[x]?TMAP[x].label:x).join(' ou ')}</span>`).join('')}</div></div>
+    <h2>${list.length} témoignage${list.length>1?'s':''} correspondant${list.length>1?'s':''}</h2>
+    ${list.length?`<div><div class="eyebrow">Répartition par cluster</div><div class="tags">${tagsOf(tally(list,d=>TMAP[d.t].label),8)}</div></div>${dossier(list)}<div class="list">${caseItems(list)}</div>`:'<p class="note">Aucun cas ne réunit tous ces critères.</p>'}`;
+  bindCases(out);
+}
+document.getElementById('qform').onsubmit=e=>{e.preventDefault();runQuery(document.getElementById('q').value)};
+const EX=['LBD lycéens Paris','grenades graves','gaz 1er oct.','garde à vue mineurs','matraque gilets jaunes vidéo'];
+document.getElementById('qexamples').innerHTML=EX.map(x=>`<button class="chip" type="button">${x}</button>`).join('');
+document.querySelectorAll('#qexamples .chip').forEach(b=>b.onclick=()=>{document.getElementById('q').value=b.textContent;runQuery(b.textContent)});
+
+// ---------- add testimony ----------
+const fill=(id,arr,sel)=>{document.getElementById(id).innerHTML=arr.map((v,i)=>`<option value="${i}" ${i===sel?'selected':''}>${v}</option>`).join('')};
+fill('aville',VILLES,0);fill('adate',DATES,4);fill('aprofil',PROFILS,0);fill('agrav',GRAV,1);
+document.getElementById('aform').onsubmit=e=>{
+  e.preventDefault();
+  const text=document.getElementById('atext').value.trim();const out=document.getElementById('aresult');
+  if(text.length<15){out.innerHTML='<p class="note">Décrivez les faits en au moins une phrase pour que les entités puissent être extraites.</p>';return}
+  const nt=norm(text);const found=TYPES.filter(t=>t.kw.some(k=>nt.includes(k)));
+  if(!found.length){out.innerHTML='<p class="note">Aucun type de violence reconnu. Mentionnez l’arme ou le geste (LBD, grenade, matraque, gaz, nasse, plaquage, garde à vue, insultes).</p>';return}
+  const pr=PREUVES.filter(p=>nt.includes(norm(p).split(' ')[0]));if(!pr.length)pr.push('Témoin');
+  const v=VILLES[+document.getElementById('aville').value],dt=DATES[+document.getElementById('adate').value];
+  const added=found.map(t=>{const c={id:'T-'+String(n++).padStart(3,'0'),type:t.id,text,ville:v,date:dt,profil:PROFILS[+document.getElementById('aprofil').value],
+    grav:+document.getElementById('agrav').value,preuves:pr,statut:'Signalé',arme:t.armes[0]||null};
+    const nd=addCase(c);const ctr=byId['type:'+t.id];nd.x=ctr.x+rnd()*20;nd.y=ctr.y+rnd()*20;return nd});
+  sim.nodes(nodes);sim.force('link').links(links);render();renderClusters();
+  out.innerHTML=`<div class="ready"><strong>${added.length} nœud${added.length>1?'s':''} ajouté${added.length>1?'s':''}</strong><br>
+    Types détectés : ${found.map(t=>t.label).join(', ')}. Preuves : ${pr.join(', ')}. Statut : Signalé, en attente de vérification.</div>`;
+  highlight=new Set(added.flatMap(d=>[d.id,...neighbors(d).map(x=>x.id)]));applyHighlight();
+};
+
+// ---------- toolbar ----------
+document.querySelectorAll('.chip[data-kind]').forEach(b=>b.onclick=()=>{const k=b.dataset.kind;show[k]=!show[k];b.setAttribute('aria-pressed',show[k]);render()});
+document.getElementById('reset').onclick=()=>{hiddenTypes.clear();highlight=null;renderClusters();render()};
+
+new ResizeObserver(()=>{const w=box.clientWidth,h=box.clientHeight;if(Math.abs(w-W)<4&&Math.abs(h-H)<4)return;W=w;H=h;centers();
+  sim.force('x').x(W/2);sim.force('y').y(H/2);sim.alpha(.4).restart()}).observe(box);
+
+renderClusters();render();
+for(let i=0;i<180;i++)sim.tick();ticked();
+})();
+</script>
+</body>
+</html>
