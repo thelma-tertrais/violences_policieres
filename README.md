@@ -13,11 +13,19 @@ Facon https://www.mediapart.fr/studio/panoramique/allo-place-beauvau-cest-pour-u
 - **Interrogation du graphe** : une requête comme « LBD lycéens Paris » isole le sous-graphe correspondant.
 - **Ajout d'un témoignage** : extraction des entités par mots-clés et rattachement au cluster.
 
-## Lancer le prototype
+## Lancer le site
 
-Ouvrir `index.html` dans un navigateur. Aucune installation n'est nécessaire (D3 et les polices sont chargés depuis un CDN).
+Ouvrir `index.html` dans un navigateur (ou `python -m http.server`). Aucune ressource tierce n'est chargée : D3 est servi depuis `vendor/`, sans police Google.
 
-Pour le publier avec GitHub Pages : *Settings → Pages → Deploy from a branch → `main` / root*.
+Le site est publié avec GitHub Pages (*Settings → Pages → Deploy from a branch → `main` / root*). `index_v1.html` et `index_v2.html` sont les prototypes d'origine.
+
+## Recueil des témoignages
+
+Le site ne stocke rien. Les témoignages sont déposés via un formulaire CryptPad chiffré de bout en bout.
+
+1. Créer le formulaire sur https://cryptpad.fr (compte de l'équipe, pas un compte personnel).
+2. Copier le **lien de participation** (jamais le lien d'édition ou d'administration) dans `FORM_URL` dans `index.html`.
+3. Tant que `FORM_URL` est vide, les boutons affichent « Formulaire bientôt disponible ».
 
 ## Prochaines étapes
 
