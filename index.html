@@ -467,7 +467,7 @@ document.querySelectorAll('#qexamples .chip').forEach(b=>b.onclick=()=>{document
 
 // ---------- encrypted form ----------
 // Lien de participation du formulaire CryptPad (jamais le lien d'administration).
-const FORM_URL='';
+const FORM_URL='https://cryptpad.fr/form/#/2/form/view/YT9EGYhTKen8-hbTGONTpflg9qSwdytXEnm713S8IaQ/';
 document.querySelectorAll('a.depot').forEach(el=>{
   if(FORM_URL){el.href=FORM_URL;return}
   el.removeAttribute('href');el.setAttribute('aria-disabled','true');el.textContent='Formulaire bientôt disponible';
